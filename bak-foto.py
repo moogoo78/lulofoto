@@ -91,7 +91,7 @@ def is_image_file(filename):
     return Path(filename).suffix.lower() in IMAGE_EXTENSIONS
 
 
-def organize_photos(source_dir, dest_dir, force_all=False):
+def organize_photos(source_dir, dest_dir, force_all=False, start_date=None):
     """
     Copy and organize photos from source to destination by date
 
@@ -99,6 +99,7 @@ def organize_photos(source_dir, dest_dir, force_all=False):
         source_dir: Source directory containing photos
         dest_dir: Destination directory for organized photos
         force_all: If True, copy all files ignoring last sync time
+        start_date: If provided, only copy photos from this date onwards (datetime object)
     """
 
     source_dir = os.path.abspath(source_dir)
@@ -117,7 +118,10 @@ def organize_photos(source_dir, dest_dir, force_all=False):
     last_sync = state['last_sync']
     copied_files = state['copied_files']
 
-    if last_sync and not force_all:
+    if start_date:
+        print(f"Starting from: {start_date.strftime('%Y-%m-%d')}")
+        print("Only copying photos from this date onwards...")
+    elif last_sync and not force_all:
         print(f"Last sync: {last_sync.strftime('%Y-%m-%d %H:%M:%S')}")
         print("Only copying new/modified files...")
     else:
@@ -141,20 +145,25 @@ def organize_photos(source_dir, dest_dir, force_all=False):
             source_path = os.path.join(root, filename)
 
             try:
+                # Get photo date first (needed for start_date check)
+                photo_date = get_photo_date(source_path)
+
+                # Check if photo is before start_date
+                if start_date and photo_date < start_date:
+                    stats['skipped'] += 1
+                    continue
+
                 # Get file modification time for incremental check
                 file_mtime = datetime.fromtimestamp(os.path.getmtime(source_path))
 
                 # Check if file needs to be copied
                 file_key = os.path.relpath(source_path, source_dir)
 
-                if not force_all and last_sync and file_mtime <= last_sync:
+                if not force_all and not start_date and last_sync and file_mtime <= last_sync:
                     # File hasn't changed since last sync
                     if file_key in copied_files:
                         stats['skipped'] += 1
                         continue
-
-                # Get photo date
-                photo_date = get_photo_date(source_path)
 
                 # Create date-based folder (format: YYMMDD)
                 date_folder = photo_date.strftime("%y%m%d")
@@ -213,6 +222,9 @@ Examples:
   # Subsequent copies (only new files)
   %(prog)s /path/to/source /path/to/destination
 
+  # Copy only photos from Jan 18, 2025 onwards
+  %(prog)s /path/to/source /path/to/destination --start-date 250118
+
   # Force copy all files
   %(prog)s /path/to/source /path/to/destination --force-all
         """
@@ -222,15 +234,29 @@ Examples:
     parser.add_argument('destination', help='Destination directory for organized photos')
     parser.add_argument('--force-all', '-f', action='store_true',
                        help='Copy all files, ignoring last sync time')
+    parser.add_argument('--start-date', '-s', type=str,
+                       help='Only copy photos from this date onwards (format: YYMMDD, e.g., 250118 for Jan 18, 2025)')
 
     args = parser.parse_args()
+
+    # Parse start_date if provided
+    start_date = None
+    if args.start_date:
+        try:
+            # Parse YYMMDD format
+            start_date = datetime.strptime(args.start_date, "%y%m%d")
+            # Set time to start of day
+            start_date = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
+        except ValueError:
+            print(f"Error: Invalid date format '{args.start_date}'. Use YYMMDD format (e.g., 250118)")
+            sys.exit(1)
 
     print("Photo Organizer")
     print(f"Source: {args.source}")
     print(f"Destination: {args.destination}")
     print("-" * 50)
 
-    success = organize_photos(args.source, args.destination, args.force_all)
+    success = organize_photos(args.source, args.destination, args.force_all, start_date)
 
     sys.exit(0 if success else 1)
 
