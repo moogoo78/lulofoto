@@ -168,7 +168,7 @@ Ensure you have read permissions for the source directory and write permissions 
 
 ## License
 
-This project is open source and available for personal and commercial use.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## Contributing
 

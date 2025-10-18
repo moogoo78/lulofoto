@@ -1,0 +1,12 @@
+# Claude Code directory
+.claude/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Backup directory
+foto-bak/
