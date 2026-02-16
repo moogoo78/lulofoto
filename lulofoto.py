@@ -131,6 +131,9 @@ def organize_photos(source_dir, dest_dir, force_all=False, start_date=None):
         dest_dir: Destination directory for organized photos
         force_all: If True, copy all files ignoring last sync time
         start_date: If provided, only copy photos from this date onwards (datetime object)
+
+    Returns:
+        tuple: (success: bool, latest_photo_date: datetime or None)
     """
 
     source_dir = os.path.abspath(source_dir)
@@ -139,7 +142,7 @@ def organize_photos(source_dir, dest_dir, force_all=False, start_date=None):
     # Validate directories
     if not os.path.exists(source_dir):
         print(f"Error: Source directory does not exist: {source_dir}")
-        return False
+        return False, None
 
     # Create destination if it doesn't exist
     os.makedirs(dest_dir, exist_ok=True)
@@ -165,6 +168,9 @@ def organize_photos(source_dir, dest_dir, force_all=False, start_date=None):
         'skipped': 0,
         'errors': 0
     }
+
+    # Track the latest photo date for updating config
+    latest_photo_date = None
 
     # Walk through source directory
     for root, dirs, files in os.walk(source_dir):
@@ -218,6 +224,10 @@ def organize_photos(source_dir, dest_dir, force_all=False, start_date=None):
                 copied_files[file_key] = photo_date.isoformat()
                 stats['copied'] += 1
 
+                # Track the latest photo date
+                if latest_photo_date is None or photo_date > latest_photo_date:
+                    latest_photo_date = photo_date
+
                 print(f"Copied: {filename} -> {date_folder}/")
 
             except Exception as e:
@@ -236,9 +246,11 @@ def organize_photos(source_dir, dest_dir, force_all=False, start_date=None):
     print(f"  Copied: {stats['copied']}")
     print(f"  Skipped: {stats['skipped']}")
     print(f"  Errors: {stats['errors']}")
+    if latest_photo_date:
+        print(f"  Latest photo date: {latest_photo_date.strftime('%Y-%m-%d')}")
     print("="*50)
 
-    return True
+    return True, latest_photo_date
 
 
 def main():
@@ -313,10 +325,15 @@ Examples:
         print("(Using saved configuration)")
     print("-" * 50)
 
-    success = organize_photos(source, destination, args.force_all, start_date)
+    success, latest_photo_date = organize_photos(source, destination, args.force_all, start_date)
 
-    # Save configuration for next time (only if new values provided)
-    if args.source or args.destination or args.start_date:
+    # Update start_date to the latest photo date if photos were copied
+    if latest_photo_date:
+        start_date = latest_photo_date
+        print(f"\nUpdating start_date in config to: {start_date.strftime('%y%m%d')} ({start_date.strftime('%Y-%m-%d')})")
+
+    # Save configuration for next time (only if new values provided or latest_photo_date updated)
+    if args.source or args.destination or args.start_date or latest_photo_date:
         save_config(source, destination, start_date)
 
     sys.exit(0 if success else 1)
