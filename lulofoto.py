@@ -122,6 +122,22 @@ def is_image_file(filename):
     return Path(filename).suffix.lower() in IMAGE_EXTENSIONS
 
 
+def get_existing_date_folders(dest_dir):
+    """Return set of YYMMDD prefixes from existing subfolders in dest_dir.
+
+    Matches folder names that start with 6 digits, e.g. '260412',
+    '260412_some_title', '260412Title'.
+    """
+    existing = set()
+    if not os.path.isdir(dest_dir):
+        return existing
+    for entry in os.listdir(dest_dir):
+        full_path = os.path.join(dest_dir, entry)
+        if os.path.isdir(full_path) and len(entry) >= 6 and entry[:6].isdigit():
+            existing.add(entry[:6])
+    return existing
+
+
 def organize_photos(source_dir, dest_dir, force_all=False, start_date=None):
     """
     Copy and organize photos from source to destination by date
@@ -169,6 +185,11 @@ def organize_photos(source_dir, dest_dir, force_all=False, start_date=None):
         'errors': 0
     }
 
+    # Snapshot of date-prefixed folders that exist before this run.
+    # Photos whose date matches any of these are skipped — even if the
+    # folder has a suffix like '260412_some_title' or '260412Title'.
+    existing_date_folders = get_existing_date_folders(dest_dir)
+
     # Track the latest photo date for updating config
     latest_photo_date = None
 
@@ -190,6 +211,12 @@ def organize_photos(source_dir, dest_dir, force_all=False, start_date=None):
                     stats['skipped'] += 1
                     continue
 
+                # Skip if a folder for this date already exists in destination
+                date_folder = photo_date.strftime("%y%m%d")
+                if date_folder in existing_date_folders:
+                    stats['skipped'] += 1
+                    continue
+
                 # Get file modification time for incremental check
                 file_mtime = datetime.fromtimestamp(os.path.getmtime(source_path))
 
@@ -203,7 +230,6 @@ def organize_photos(source_dir, dest_dir, force_all=False, start_date=None):
                         continue
 
                 # Create date-based folder (format: YYMMDD)
-                date_folder = photo_date.strftime("%y%m%d")
                 dest_folder = os.path.join(dest_dir, date_folder)
                 os.makedirs(dest_folder, exist_ok=True)
 
